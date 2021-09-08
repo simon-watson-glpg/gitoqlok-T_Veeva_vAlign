@@ -1,0 +1,87 @@
+///$tab t_multichannel_consent
+/* 
+Update to direct api, to ingest additional fields - 2021-04-01 
+*/
+
+t_multichannel_consent:
+LOAD
+    Account_vod__c as account_id,                              // Need to update when change to DWH
+    Name as consent_id,
+//    multichannel_consent_name as consent_id,                   // Need to update when change to DWH
+//         Date(Floor(capture_dt)) as capture_dt,					// Need to update when change to DWH
+        Date(Floor(Capture_Datetime_vod__c)) as capture_dt,        
+//     If(Upper(opt_type)='OPT_IN_VOD','Opt-In',
+//     	If(Upper(opt_type)='OPT_OUT_VOD','Opt-Out',
+//         If(Upper(opt_type)='OPT_IN_PENDING_VOD','Pending')
+//         )) as opt_type,
+    If(Upper(Opt_Type_vod__c)='OPT_IN_VOD','Opt-In',
+    	If(Upper(Opt_Type_vod__c)='OPT_OUT_VOD','Opt-Out',
+        If(Upper(Opt_Type_vod__c)='OPT_IN_PENDING_VOD','Pending')
+        )) as opt_type,        
+//     captured_by,
+//     channel_source,
+//     channel_value,
+//     consent_confirm_dt,
+	Consent_Line_vod__c as      consent_line,
+//     consent_line,
+//     consent_type,
+//     content_type,
+//     created_by_id,
+//     created_date,
+//     currency_iso_cd,
+//     default_consent_text,
+//     detail_group,
+//     disclaimer_text,
+//     external_id,
+		Id as multichannel_consent_id,
+      IsDeleted as is_deleted,
+//    	is_deleted,
+//     is_locked,
+//     last_modified_by_id,
+//     last_modified_date,
+//     last_referenced_date,
+//     last_viewed_date,
+//     last_device,
+//     may_edit,
+//     mobile_id,
+     Name as multichannel_consent_name,
+     Opt_Expiration_Date_vod__c as opt_expiration_date,
+//     opt_out_disclaimer_text,
+//     optout_event_type,
+//     product,
+//     receipt_email,
+//     receipt_sent_email_transaction_id,
+//     receipt_sent_email,
+     RecordTypeId as recordtype_id,
+//     related_transaction_id,
+//     sample_consent_template_data,
+//     sent_email,
+//     signature_dt,
+//     signature_id,
+//     signature,
+//     sub_channel_key,
+//     systemmodstamp,
+//     union_id,
+//     user_last_notified
+	Channel_Source_vod__c,
+	GLPG_Consent_Source__c,
+	CDP_Consent_ID__c
+FROM 
+//	[$(vQVD_Extract_Path)/e_v_multichannel_consent.qvd](qvd)
+    [lib://Customer View/1.QVD/5.Migration/e_v_multichannel_consent_addition.qvd](qvd)
+;
+
+left join
+LOAD
+    recordtype_id,
+    recordtype_name 
+FROM [lib://Customer View/1.QVD/5.Migration/e_recordtype.qvd]
+(qvd);
+
+
+left join
+Load
+    account_id
+    ,account_territory
+    ,ApplyMap('map_territory_id_country_id',account_territory,Null()) as country_id
+Resident t_account_territory_veeva;

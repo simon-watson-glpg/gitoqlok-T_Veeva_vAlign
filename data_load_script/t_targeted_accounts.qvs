@@ -1,0 +1,76 @@
+///$tab t_targeted_accounts
+tmp_targeted_msl_accounts:
+NoConcatenate
+Load
+    account_id
+    ,account_territory
+Resident t_account_territory_veeva
+Where 
+	Len(Trim(account_territory)) > 0
+;
+
+/******************
+CODE UPDATE
+2021.01.20 - Simon Watson
+1. Updated to product metrics table for KOL tier
+*******************/
+
+Inner Join(tmp_targeted_msl_accounts)
+LOAD
+    account_id
+    ,account_tier_kol
+    ,account_tier_kol_RA
+    ,account_tier_kol_UC
+    ,1 as is_targeted_msl
+//FROM 	[$(vQVD_Transform_Path)/t_account_veeva.qvd](qvd)
+Resident t_account_veeva
+Where
+	KOL_target_indication <> 'None'
+    //account_tier_kol <> 'None' - UPDATED TO kol_target_indication to enable multiple indications not just RA
+	and glpg_ind_status_cd = '3'
+;
+
+tmp_targeted_rep_accounts:
+NoConcatenate
+Load
+    account_id
+    ,account_territory
+Resident t_account_territory_veeva
+Where 
+	Len(Trim(account_territory)) > 0
+;
+
+Inner Join(tmp_targeted_rep_accounts)
+LOAD
+    account_id
+    ,account_segment
+    ,account_segment_RA
+    ,account_segment_UC
+    ,1 as is_targeted
+    ,Segment_target_indication as target_indication
+//FROM 	[$(vQVD_Transform_Path)/t_account_veeva.qvd](qvd)
+Resident t_account_veeva
+Where
+	Segment_target_indication <> 'None'
+	//account_segment <> 'None'- UPDATED TO Segment_target_indication to enable multiple indications not just RA
+    and glpg_ind_status_cd = '3'
+;
+
+t_targeted_accounts:
+NoConcatenate
+Load 
+	*
+    ,ApplyMap('map_territory_id_country_id',account_territory,Null()) as country_id
+Resident
+	tmp_targeted_msl_accounts
+;
+
+Concatenate(t_targeted_accounts)
+Load 
+	*
+    ,ApplyMap('map_territory_id_country_id',account_territory,Null()) as country_id
+Resident
+	tmp_targeted_rep_accounts
+;
+
+Drop Tables tmp_targeted_rep_accounts, tmp_targeted_msl_accounts;

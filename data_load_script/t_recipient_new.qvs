@@ -1,0 +1,66 @@
+///$tab t_recipient_new
+// Define latest survey response
+t_v_Recipient_map_name:
+mapping
+LOAD
+    Survey_vod__c & Account_vod__c as %SurveyKey
+	,Name as survey_name
+FROM 
+	[lib://Customer View/1.QVD/5.Migration/e_v_survey_response.qvd](qvd)
+where Status_vod__c = 'Submitted_vod'
+//group by Survey_vod__c, Account_vod__c, Name
+;
+
+
+t_v_Recipient_map_time:
+mapping
+LOAD
+    Survey_vod__c & Account_vod__c as %SurveyKey
+	,date((Submitted_DateTime_vod__c),'DD/MM/YYYY HH:MM:SS') as Submitted_DateTime_vod__c    
+FROM 
+	[lib://Customer View/1.QVD/5.Migration/e_v_survey_response.qvd](qvd)
+where Status_vod__c = 'Submitted_vod'
+//group by Survey_vod__c, Account_vod__c, Name
+;
+
+answers_map:
+Mapping
+LOAD
+	Survey_Target_vod__c as %Answer_Key,     
+	Response_vod__c as Answer
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_response_detail.qvd]
+(qvd)
+where not isnull(Response_vod__c)
+;
+//While IterNo() <= 1+Len(KeepChar(Response_vod__c,';'));
+
+
+t_v_Recipient_new:
+Load
+	*,
+    if(WildMatch(survey_name_temp,'*[Anon]*'), trim(left(survey_name_temp,len(survey_name_temp)-6)), survey_name_temp) as survey_name;
+Load
+    *,
+    applymap('t_v_Recipient_map_name',%SurveyKey,null()) as survey_name_temp,
+    applymap('t_v_Recipient_map_time',%SurveyKey,null()) as Submitted_DateTime_vod__c
+    ;
+LOAD
+    Id as %Answer_Key,
+    Survey_vod__c & Account_vod__c as %SurveyKey,
+    Account_vod__c,
+    subfield(applymap('answers_map',Id,null()),';') as Answer,
+    Status_vod__c
+FROM 
+	[lib://Customer View/1.QVD/5.Migration/e_v_survey_response.qvd](qvd)
+where     not isnull(applymap('answers_map',Id,null()))
+AND NOT IsNull(Account_vod__c)
+and wildmatch(left(if(WildMatch(applymap('t_v_Recipient_map_name',Survey_vod__c & Account_vod__c,null()),'*[Anon]*'), trim(left(applymap('t_v_Recipient_map_name',Survey_vod__c & Account_vod__c,null()),len(applymap('t_v_Recipient_map_name',Survey_vod__c & Account_vod__c,null()))-6)), applymap('t_v_Recipient_map_name',Survey_vod__c & Account_vod__c,null())),2),'UC','RA')
+;
+
+
+left join
+Load
+    account_id as Account_vod__c
+    ,account_territory
+    ,ApplyMap('map_territory_id_country_id',account_territory,Null()) as country_id
+Resident t_account_territory_veeva;

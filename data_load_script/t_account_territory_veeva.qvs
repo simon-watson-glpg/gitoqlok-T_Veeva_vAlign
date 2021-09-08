@@ -1,0 +1,47 @@
+///$tab t_account_territory_veeva
+/*****************
+
+From vAlign tables determine the alignment of the account
+1. account_aln is used to link crm_record_id to the valign data
+2. account_territory outlines the territories associated to the account
+3. vAlgin tables are currently a weekly refresh rfom BrainStation team
+
+**************/
+
+LIB CONNECT TO 'glpg-dataplatform-developer (ad_simon.watson@glpg.com)';
+// LIB CONNECT TO 'GLPG DataPlatform Development (ad_shiny.shelomith-ext@glpg.com)';
+
+
+t_account_territory_veeva:
+LOAD 
+	id as account__aln, 
+	crm_record_id__aln as account_id,
+    glpg_primary_brick__c
+;
+SELECT 
+	"id",
+	"crm_record_id__aln",
+    "glpg_primary_brick__c"
+FROM "veeva_align"."account__aln";
+
+left join (t_account_territory_veeva)
+LOAD  
+	account__aln, 
+	account__aln_name__v, 
+	territory__aln, 
+    territory__aln_name__v as account_territory,
+	country__aln, 
+	country__aln_name__v
+;
+
+SELECT 
+	"account__aln",
+	"account__aln_name__v",
+	"end_date__aln",
+	"source__aln",
+	"start_date__aln",
+	"territory__aln",
+    "territory__aln_name__v",
+	"country__aln",
+	"country__aln_name__v"
+FROM "veeva_align"."account_territory__aln";

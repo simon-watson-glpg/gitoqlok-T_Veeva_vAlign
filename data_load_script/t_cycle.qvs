@@ -1,0 +1,73 @@
+///$tab t_cycle
+map_t_account_veeva_segment_target:
+mapping
+Load
+	account_id,
+    Segment_target_indication
+resident t_account_veeva;
+
+t_mc_cycle_plan:
+LOAD
+    Id as cycle_id,
+    Name as cycle_name
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_mc_cycle.qvd]
+(qvd);
+
+left join (t_mc_cycle_plan)
+LOAD
+    Id as cycle_territory_id,
+    Name as cycle_territory_name,
+    Cycle_vod__c as cycle_id,
+    Start_Date_vod__c as cycle_start,
+    End_Date_vod__c as cycle_end,
+    Territory_vod__c as territory_cycle_name
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_mc_plan.qvd]
+(qvd)
+;
+
+// Updated to group by ID on 14/06/2021 Simon Watson
+
+left join (t_mc_cycle_plan)
+LOAD
+    FirstValue(Cycle_Plan_vod__c) as cycle_territory_id,
+	Id AS cycle_plan_target_id,
+    FirstValue(Channel_Interactions_Goal_vod__c) as mccp_account_goals,
+    FirstValue(Target_vod__c) as account_id,
+    FirstValue(applymap('map_t_account_veeva_segment_target',Target_vod__c,null())) as target_indication,
+    FirstValue(Name) as cycle_name_account
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_mc_target.qvd]
+(qvd)
+group by Id
+;
+
+left join (t_mc_cycle_plan)
+LOAD
+    Cycle_Plan_Target_vod__c as cycle_plan_target_id,
+	Id as cycle_channel_id,
+    Name as cycle_channel_name,
+    Channel_Activity_Actual_vod__c,
+    Channel_Activity_Goal_vod__c as cycle_channel_goal,
+//    Channel_vod__c as cycle_channel, 
+//		---- Need to align to Veeva call channel naming see below transformation
+//		---- Events = Meeting participation	
+    if(wildmatch(Channel_vod__c,'Face to Face')=1,'F2F',Channel_vod__c) as cycle_channel,
+    Cycle_Channel_vod__c
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_mc_channel_plan.qvd]
+(qvd)
+where     IsDeleted = '0'
+;
+
+left join (t_mc_cycle_plan)
+Load
+    account_territory as territory_cycle_name,
+	if(firstvalue(country__aln_name__v)='Benelux' and left(account_territory,1)='B','BE',
+    if(firstvalue(country__aln_name__v)='Benelux' and left(account_territory,1)='N','NL',
+    if(firstvalue(country__aln_name__v)='Espana','ES', 
+    if(firstvalue(country__aln_name__v)='France','FR', 
+    if(firstvalue(country__aln_name__v)='Germany','DE', 
+    if(firstvalue(country__aln_name__v)='Italy','IT',     
+	if(firstvalue(country__aln_name__v)='United Kingdom','GB',     
+    firstvalue(country__aln_name__v)))))))) as country_id
+Resident t_account_territory_veeva
+group by account_territory
+;

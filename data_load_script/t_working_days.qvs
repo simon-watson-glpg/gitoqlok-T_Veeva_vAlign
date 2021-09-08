@@ -1,0 +1,132 @@
+///$tab t_working_days
+/***
+	generate all days as from the first user creation date for active users
+***/
+
+temp_min_created_date:
+Load
+	Min(created_date) as min_created_date
+FROM 
+	[$(vQVD_Extract_Path)/e_v_user.qvd](qvd)
+Where
+	is_active = 'True'
+;
+
+Let vMin_Created_dDate = Peek('min_created_date');
+
+Drop table temp_min_created_date;
+
+temp_working_days:
+LOAD
+	Date($(vMin_Created_dDate) + IterNo() - 1) as temp_date
+AutoGenerate 1 
+While 
+	$(vMin_Created_dDate) + IterNo() -1 <= Today()
+;
+
+/***
+	match days between user creation date and today for active users
+***/
+
+temp_working_days_users:
+IntervalMatch(temp_date)
+load
+	created_date
+    ,today()
+FROM 
+	[$(vQVD_Extract_Path)/e_v_user.qvd](qvd)
+Where
+	is_active = 'True'
+;
+
+Drop Table temp_working_days;
+
+
+
+temp_working_days_users_UK_FIX:
+Load
+Distinct
+    user_id
+    ,created_date
+FROM 
+	[$(vQVD_Extract_Path)/e_v_user.qvd](qvd)
+Where 
+	is_active = 'True'
+    and Not Match(Upper(first_name),'DUMMY','VEEVA','AUTOMATED')
+    and user_type = 'Standard'
+    and WildMatch(Upper(profile_name),'*VSPA_REP*','*VSPA_MSL*')				//working days should not only be generated for REP and MSL profiles.
+	and not wildmatch(user_id,'0054J0000062KsUQAU','0054J0000062KsNQAU','0054J0000062KsSQAU','0054J0000062KrxQAE','0054J0000062KrtQAE','0054J0000062KruQAE','0054J0000062KsVQAU','0054J0000062KsCQAU','0054J0000062KsHQAU','0054J0000062KsTQAU','0054J0000062Ks0QAE','0054J0000062Ks9QAE','0054J0000062KsIQAU','0054J0000062KtFQAU')
+;
+
+Concatenate (temp_working_days_users_UK_FIX)
+Load * Inline [
+user_id, 			created_date
+'0054J0000062KsUQAU',	2020-12-21 11:24:21.000000
+'0054J0000062KsNQAU',	2020-12-21 11:24:21.000000
+'0054J0000062KsSQAU', 2020-12-21 11:24:21.000000
+'0054J0000062KrxQAE', 2020-12-21 11:24:21.000000
+'0054J0000062KrtQAE', 2020-12-21 11:24:21.000000
+'0054J0000062KruQAE', 2020-12-21 11:24:21.000000
+'0054J0000062KsVQAU', 2020-12-21 11:24:21.000000
+'0054J0000062KsCQAU', 2020-12-21 11:24:21.000000
+'0054J0000062KsHQAU', 2020-12-21 11:24:21.000000
+'0054J0000062KsTQAU', 2020-12-21 11:24:21.000000
+'0054J0000062Ks0QAE', 2020-12-21 11:24:21.000000
+'0054J0000062Ks9QAE', 2020-12-21 11:24:21.000000
+'0054J0000062KsIQAU', 2020-12-21 11:24:21.000000
+'0054J0000062KtFQAU', 2020-12-21 11:24:21.000000
+];
+
+
+Left Join(temp_working_days_users)
+load
+	Distinct
+    user_id
+    ,Left(user_id,Len(user_id)-3) as user_mgmt_id
+	,created_date
+    ,today()
+Resident   temp_working_days_users_UK_FIX;
+drop Table temp_working_days_users_UK_FIX;
+
+
+t_working_days_no_territory:
+NoConcatenate
+
+Load
+	user_id
+    ,user_id as crm_record_id__aln
+    ,Date(Floor(temp_date)) as working_day
+Resident
+	temp_working_days_users
+Where
+	WeekDay(temp_date) < 5
+;
+
+left join (t_working_days_no_territory)
+IntervalMatch(working_day,crm_record_id__aln)
+Load
+  start_fix,
+  end_fix,
+  crm_record_id__aln
+Resident temp_roster
+;
+
+left join (t_working_days_no_territory)
+Load
+    crm_record_id__aln,
+    start_fix,
+    end_fix,
+	name__v,
+    territory__aln_name__v   as territory_id
+Resident
+temp_roster;
+
+t_working_days:
+Load
+	*
+    ,ApplyMap('map_territory_id_country_id',territory_id,Null()) as country_id
+Resident t_working_days_no_territory;
+
+
+
+Drop Table temp_working_days_users;

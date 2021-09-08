@@ -1,0 +1,429 @@
+///$tab t_call_veeva
+/*************************
+CODE ADDITION
+2021-02-15 - Simon Watson
+Product Maps for Reps and MSLs and account specialty
+**************************/
+
+map_product_name:
+mapping
+LOAD
+    product_id,
+    product_name
+FROM 
+[lib://Customer View/1.QVD/1.Extract/e_v_product.qvd]
+(qvd);
+
+map_medical_discussion:
+mapping
+LOAD
+    Interaction_vod__c as call_id,
+    ApplyMap('map_product_name',Detail_Group_vod__c,null()) as detail_name
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_medical_discussion.qvd]
+(qvd);
+
+// Hold off until discussion with CRM team - 2021-09-08
+
+map_account_specialty:
+Mapping
+LOAD   
+    account_id,
+    IF(specialty_1_nwk ='Reuma-verpleegkundige','RA',
+      if(specialty_2_nwk ='Reuma-verpleegkundige','RA',
+      if(specialty_3_nwk ='Reuma-verpleegkundige','RA',
+        IF(specialty_1_nwk ='Reumatologia','RA',
+          if(specialty_2_nwk ='Reumatologia','RA',
+          if(specialty_3_nwk ='Reumatologia','RA',
+        IF(specialty_1_nwk ='Reumatoloog','RA',
+          if(specialty_2_nwk ='Reumatoloog','RA',
+          if(specialty_3_nwk ='Reumatoloog','RA',
+        IF(specialty_1_nwk ='Rhumatologie','RA',
+          if(specialty_2_nwk ='Rhumatologie','RA',
+          if(specialty_3_nwk ='Rhumatologie','RA',
+    IF(specialty_1_nwk ='Gastro-entérologie','UC',
+      if(specialty_2_nwk ='Gastro-entérologie','UC',
+      if(specialty_3_nwk ='Gastro-entérologie','UC',
+    IF(specialty_1_nwk ='Gastroenterology','UC',
+      if(specialty_2_nwk ='Gastroenterology','UC',
+      if(specialty_3_nwk ='Gastroenterology','UC',      
+ 	'Other')))))))))))))))))) as speciality_group
+FROM [lib://Customer View/1.QVD/2.Transform/t_account_veeva.qvd]
+(qvd);
+
+
+/* CODE UPDATE
+Simon Watson - 2021/05/24
+Added call record type into Call table with mapping table from recordtype
+*/
+
+map_recordtype_call_type:
+Mapping
+LOAD
+	recordtype_id
+    ,recordtype_name
+FROM 
+	[$(vQVD_Extract_Path)/e_v_recordtype.qvd](qvd)
+where object_type = 'Call2_vod__c'
+;
+
+map_account_KOL_indication:
+Mapping
+LOAD
+	account_id,
+    KOL_target_indication
+Resident
+t_account_veeva;
+
+map_account_segment_indication:
+Mapping
+LOAD
+	account_id,
+    Segment_target_indication
+Resident
+t_account_veeva;
+
+/*************************************/
+
+temp_call_veeva:
+LOAD
+    account_id
+    ,address
+    ,applymap('map_recordtype_call_type',recordtype_id,null()) as call_record_type
+    ,Replace(Subfield(attendee_type,'_vod',1),'_',' ') as attendee_type
+    ,is_clm
+    ,call_comments
+	,If(call_status= 'Submitted_vod',Date(Floor((call_date)))) as call_date
+    ,Date(Floor((call_date))) as call_planned_date
+    ,If((call_date)>Today(),1) as is_in_future
+    ,call_dt as call_datetime
+    ,call_type
+    ,created_date as created_date
+    ,call_detailed_products
+    ,entity_display_name
+    ,glpg_call_channel
+    ,call_id
+    ,is_parent_call
+    ,last_modified_date
+    ,owner_id
+    ,parent_address_id
+    ,parent_address
+    ,parent_call
+    ,presentations
+    ,product_priority_1
+    ,product_priority_2
+    ,product_priority_3
+    ,product_priority_4
+    ,product_priority_5
+    ,recordtype_id
+    ,signature_date
+    ,Subfield(call_status,'_vod',1) as call_status
+    ,is_submitted_by_mobile
+//     ,territory_id					//overrule territory registered for the call. we take the territory of the user who executed the call as leading.
+    ,call_zip
+    ,next_call_notes
+    ,applymap('map_medical_discussion',call_id,null()) as medical_discussion // New addition for indication allocation
+    ,applymap('map_account_KOL_indication',account_id,null()) as KOL_target_indication
+
+/**********************
+Medical indication split based on:
+1. The account is within target list for RA/UC
+2. The indication is listed in call details (including medical dicussion)
+***********************/
+
+    ,if(applymap('map_account_KOL_indication',account_id,null()) = 'RA','RA',
+    if(wildmatch(call_detailed_products,'*Jyseleca(RA)*'),'RA',
+    	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'RA*','Medical_Rheumatology'),'RA',
+	if(applymap('map_account_KOL_indication',account_id,null()) = 'UC','UC',
+        if(wildmatch(call_detailed_products,'*Jyseleca(UC)*'),'UC',
+        	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'UC*'),'UC',
+   				'Other')))))) as call_indication_MSL,
+
+/**********************
+Commercial Indication split based on:
+1. The user id of the call - to take into account Elwin and Didier in Belgium - as per discussion with NBS June 2021
+2. The account is within target list for RA/UC
+3. The indication is listed in call details 
+***********************/
+
+    IF(owner_id = '0054J0000062oPUQAY','UC', IF(owner_id = '0054J0000062oNxQAI','UC',  // if calls created by either in BE didier (bc24) or elwin (bc22) -> UC
+	IF(owner_id = '0054J000002mOA8QAM','RA', IF(owner_id = '0054J000002mOA3QAM','RA',  // if calls created by sibylle (BC14) or tom (BC12),
+    IF(owner_id = '0054J000002lRajQAE','RA', IF(owner_id = '0054J000005APTUQA4','RA', // wim (BC11), vincent (bc13)
+	if(applymap('map_account_KOL_indication',account_id,null()) = 'RA','RA', // if segment against RA -> RA
+   	if(wildmatch(call_detailed_products,'*Jyseleca(RA)*','*GLPG(Company)  Jyseleca(RA)*','*Jyseleca(RA)  GLPG(Company)*'),'RA', // within call detail was RA listed
+   	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'RA*','Medical_Rheumatology'),'RA',
+	if(applymap('map_account_KOL_indication',account_id,null()) = 'UC','UC',
+    if(wildmatch(call_detailed_products,'*Jyseleca(UC)*','*Filgotinib(UC)*','*GLPG*','*GLPG(Company)*','*GLPG(Company)  Filgotinib(UC)*'),'UC',
+    if(wildmatch(applymap('map_medical_discussion',call_id,null()),'UC*'),'UC',
+   				'Other')))))))))))) as call_indication_KAM,                
+
+     if(wildmatch(call_detailed_products,'*Jyseleca(RA)*','*GLPG(Company)  Jyseleca(RA)*','*Jyseleca(RA)  GLPG(Company)*'),'RA',
+    	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'RA*','Medical_Rheumatology'),'RA',
+        if(wildmatch(call_detailed_products,'*Jyseleca(UC)*','*Filgotinib(UC)*','*GLPG*','*GLPG(Company)*','*GLPG(Company)  Filgotinib(UC)*'),'UC',
+        	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'UC*'),'UC',
+   				'Other')))) as call_indication,
+
+	ApplyMap('map_account_specialty',account_id,null()) as specialty_group,
+    
+    if(if(wildmatch(call_detailed_products,'*Jyseleca(RA)*','*GLPG(Company)  Jyseleca(RA)*','*Jyseleca(RA)  GLPG(Company)*'),'RA',
+    	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'RA*','Medical_Rheumatology'),'RA',
+		   	if(wildmatch(call_detailed_products,'*Jyseleca(UC)*','*Filgotinib(UC)*','*GLPG*','*GLPG(Company)*','*GLPG(Company)  Filgotinib(UC)*'),'UC',
+   				'Other')))  = 'Other' and ApplyMap('map_account_specialty',account_id,null()) = 'UC','UC',
+    	
+        if(if(wildmatch(call_detailed_products,'*Jyseleca(RA)*','*GLPG(Company)  Jyseleca(RA)*','*Jyseleca(RA)  GLPG(Company)*'),'RA',
+    	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'RA*','Medical_Rheumatology'),'RA',
+		   	if(wildmatch(call_detailed_products,'*Jyseleca(UC)*','*Filgotinib(UC)*','*GLPG*','*GLPG(Company)*','*GLPG(Company)  Filgotinib(UC)*'),'UC',
+   				'Other')))  = 'Other' and ApplyMap('map_account_specialty',account_id,null()) = 'RA','RA',
+    		
+            if(wildmatch(call_detailed_products,'*Jyseleca(RA)*','*GLPG(Company)  Jyseleca(RA)*','*Jyseleca(RA)  GLPG(Company)*'),'RA',
+    	if(wildmatch(applymap('map_medical_discussion',call_id,null()),'RA*','Medical_Rheumatology'),'RA',
+		   	if(wildmatch(call_detailed_products,'*Jyseleca(UC)*','*Filgotinib(UC)*','*GLPG*','*GLPG(Company)*','*GLPG(Company)  Filgotinib(UC)*'),'UC',
+   				'Other'))) )) as indication	
+FROM 
+	[$(vQVD_Extract_Path)/e_v_call.qvd](qvd)
+;
+
+/****************** 
+CODE UPDATE
+Simon Watson - 20210219
+Updated to include temp call2vod additions - these will eventually be imported into AWS, at which point we remove the below addition
+******************/
+
+left join (temp_call_veeva)
+LOAD
+    Id as call_id,
+    Coaching_Visit__c as coaching_visit,
+    GLPG_Dual_Visit__c as dual_visit,
+    GLPG_Meeting_Trigger__c
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_call2vod_addition.qvd]
+(qvd);
+
+////////////////////////////////////////////////////////////////////////
+
+
+temp_country_map:
+Load
+    account_territory,
+	if(firstvalue(country__aln_name__v)='Benelux' and left(account_territory,1)='B','BE',
+    if(firstvalue(country__aln_name__v)='Benelux' and left(account_territory,1)='N','NL',
+    if(firstvalue(country__aln_name__v)='Espana','ES', 
+    if(firstvalue(country__aln_name__v)='France','FR', 
+    if(firstvalue(country__aln_name__v)='Germany','DE', 
+    if(firstvalue(country__aln_name__v)='Italy','IT',     
+	if(firstvalue(country__aln_name__v)='United Kingdom','GB',     
+    firstvalue(country__aln_name__v)))))))) as country
+Resident
+t_account_territory_veeva
+group by account_territory
+;
+
+map_territory_id_country_id:
+Mapping
+Load
+	account_territory as territory
+    ,country as country_cd
+Resident
+temp_country_map;
+
+drop Table temp_country_map;
+
+
+map_account_id_recordtype_id:
+Mapping
+LOAD
+    account_id
+    ,recordtype_id
+FROM 
+	[$(vQVD_Extract_Path)/e_v_account.qvd](qvd);
+;
+
+map_recordtype_is_persontype:
+Mapping
+LOAD
+    recordtype_id
+    ,is_person_type
+FROM 
+	[$(vQVD_Extract_Path)/e_v_recordtype.qvd](qvd)
+Where
+	object_type = 'Account'
+;
+
+map_user_id_is_sales_or_msl:
+Mapping
+Load
+	user_id
+    ,1
+FROM 
+	[$(vQVD_Extract_Path)/e_v_user.qvd](qvd)
+Where
+	WildMatch(Upper(profile_name),'*MSL*','*REP*')
+;
+
+tmp_targeted_msl_accounts:
+Load
+    account_id
+    ,account_territory
+Resident t_account_territory_veeva;
+
+/*************************
+CODE UPDATE
+2021.01.20 - Simon Watson
+1. Amend to the handling of KOL Tier, moved to Product Metrics table and account_tier_kol
+2. Updated the from path to resident - not sure why refers to old table
+**************************/
+
+Inner Join(tmp_targeted_msl_accounts)
+LOAD
+    account_id
+Resident t_account_veeva
+Where
+KOL_target_indication <> 'None'
+;
+
+
+map_msl_account_id_account_territory:
+Mapping
+Load
+	account_id&'|'&account_territory
+    ,1
+Resident
+	tmp_targeted_msl_accounts
+;
+
+
+map_msl_account_id_account_territory_2:
+Mapping
+Load
+	account_id
+    ,1
+Resident
+	tmp_targeted_msl_accounts
+;
+
+Drop Table tmp_targeted_msl_accounts;
+
+tmp_targeted_rep_accounts:
+Load
+    account_id
+    ,account_territory
+Resident t_account_territory_veeva;
+
+Inner Join(tmp_targeted_rep_accounts)
+LOAD
+    account_id
+    ,Segment_target_indication
+Resident t_account_veeva
+Where
+	Segment_target_indication <> 'None' 
+;
+
+map_rep_account_id_account_territory:
+Mapping
+Load
+	account_id&'|'&account_territory
+    ,1
+Resident
+	tmp_targeted_rep_accounts
+;
+
+map_rep_account_id_account_territory_indication:
+Mapping
+Load
+	account_id&'|'&account_territory
+    ,Segment_target_indication
+Resident
+	tmp_targeted_rep_accounts
+;
+
+Drop Table tmp_targeted_rep_accounts;
+
+temp_call_veeva_no_territory:
+NoConcatenate
+Load
+	*
+    ,call_planned_date as date_id
+    ,owner_id as crm_record_id__aln
+    ,ApplyMap('map_account_id_recordtype_id',account_id,Null()) as account_recordtype_id
+//    ,ApplyMap('map_user_id_territory_name',owner_id,Null()) as territory_id **************Replaced by valign and interval match
+Resident
+	temp_call_veeva
+//Where 	ApplyMap('map_user_id_is_sales_or_msl',owner_id,Null())=1
+;
+
+/************
+Bring in the vAlign table of which territroy the user was in at the point of the call being made
+************/
+
+left join (temp_call_veeva_no_territory)
+IntervalMatch(date_id,crm_record_id__aln)
+Load
+  start_fix,
+  end_fix,
+  crm_record_id__aln
+Resident temp_roster
+;
+
+left join (temp_call_veeva_no_territory)
+Load
+    crm_record_id__aln,
+    start_fix,
+    end_fix,
+	name__v,
+    territory__aln_name__v 
+Resident
+temp_roster;
+
+
+t_call_veeva:
+NoConcatenate
+Load
+	*
+    ,If(ApplyMap('map_recordtype_is_persontype',account_recordtype_id,Null())='False' and /*Not IsNull(parent_call)*/ Len(parent_call)>0 and call_status= 'Submitted',1)  as is_visit
+    ,If(ApplyMap('map_recordtype_is_persontype',account_recordtype_id,Null())='True' and call_status= 'Submitted',1)  as is_call
+    ,If(ApplyMap('map_msl_account_id_account_territory',account_id&'|'&territory_id,Null())=1,1) as is_targeted_msl
+    ,If(ApplyMap('map_rep_account_id_account_territory',account_id&'|'&territory_id,Null())=1,1) as is_targeted
+    ,ApplyMap('map_rep_account_id_account_territory_indication',account_id&'|'&territory_id,Null()) as target_indication    
+    ,ApplyMap('map_territory_id_country_id',territory_id,Null()) as country_id
+;
+Load
+	*,
+    territory__aln_name__v as territory_id
+Resident
+temp_call_veeva_no_territory;
+
+
+
+Drop Tables temp_call_veeva, temp_call_veeva_no_territory;
+
+/***
+determine the account of the parent call to be able to report on relations between HCO and HCP
+***/
+
+[map_account_id_hospital]:
+Mapping
+Load 
+	account_id
+    ,1
+Resident
+	t_account_veeva
+Where
+	account_type = 'Hospital'
+;
+
+[map_parent_call_parent_account]:
+Mapping
+Load 
+	If(is_parent_call = 1,call_id, parent_call) as parent_call 
+    ,account_id
+Resident
+	t_call_veeva
+Where
+	ApplyMap('map_account_id_hospital',account_id) = 1
+;
+
+Left Join(t_call_veeva)
+Load
+	call_id
+    ,ApplyMap('map_parent_call_parent_account',IF(is_parent_call = 1,call_id, parent_call),Null()) as parent_account_id
+Resident
+	t_call_veeva
+;

@@ -1,0 +1,20 @@
+///$tab t_brick_account
+t_brick_account:
+LOAD
+    account_id AS Account_vod__c,
+    glpg_primary_brick__c AS Brick_vod__c
+Resident t_account_territory_veeva;
+
+inner join 
+LOAD
+    account_id as Account_vod__c,
+    hcp_hco
+Resident t_account_veeva
+where hcp_hco ='HCP'
+;
+
+/*
+Need to check how Brick is being used outside of the French mapping
+Where else is brick stored in vAlgin
+
+*/

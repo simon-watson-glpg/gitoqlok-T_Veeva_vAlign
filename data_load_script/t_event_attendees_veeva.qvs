@@ -1,0 +1,169 @@
+///$tab t_event_attendees_veeva
+tmp_targeted_msl_accounts:
+Load
+    account_id
+    ,account_territory
+Resident t_account_territory_veeva;
+
+Inner Join(tmp_targeted_msl_accounts)
+LOAD
+    account_id
+//FROM 	[$(vQVD_Transform_Path)/t_account_veeva.qvd](qvd)
+Resident t_account_veeva
+Where
+	KOL_target_indication <> 'None'
+    //account_tier_kol <> 'None' - UPDATED TO kol_target_indication to enable multiple indications not just RA
+;
+
+map_msl_account_id_account_territory:
+Mapping
+Load
+	account_id&'|'&account_territory
+    ,1
+Resident
+	tmp_targeted_msl_accounts
+;
+
+Drop Table tmp_targeted_msl_accounts;
+
+tmp_targeted_rep_accounts:
+Load
+    account_id
+    ,account_territory
+Resident t_account_territory_veeva;
+
+Inner Join(tmp_targeted_rep_accounts)
+LOAD
+    account_id
+    ,Segment_target_indication
+//FROM [$(vQVD_Transform_Path)/t_account_veeva.qvd](qvd)
+Resident t_account_veeva
+Where
+	Segment_target_indication <> 'None'
+//account_segment <> 'None' - UPDATED FOR INDICATION SPLIT
+;
+
+map_rep_account_id_account_territory:
+Mapping
+Load
+	account_id&'|'&account_territory
+    ,1
+Resident
+	tmp_targeted_rep_accounts
+;
+
+
+map_rep_account_id_account_territory_indication:
+Mapping
+Load
+	account_id&'|'&account_territory
+    ,Segment_target_indication
+Resident
+	tmp_targeted_rep_accounts
+;
+
+
+Drop Table tmp_targeted_rep_accounts;
+
+
+
+map_user_id_country:
+mapping Load
+    user_id
+	,country_cd
+FROM 
+	[$(vQVD_Transform_Path)/t_user_veeva.qvd]
+(qvd);
+
+map_user_id_is_msl:
+Mapping
+Load
+	user_id
+    ,is_msl
+FROM 
+	[$(vQVD_Transform_Path)/t_user_veeva.qvd]
+(qvd);
+
+map_Event_Date:
+mapping load
+	medical_event_id,
+  	date(start_time,'DD/MM/YYYY') AS Event_Date
+FROM 
+	[$(vQVD_Extract_Path)/e_v_medical_event.qvd](qvd)
+;
+
+/*
+Need to attribute event to all "users" not just the "owner"
+Suggestion to duplicate / loop on user to create multiple event activity per user
+Need to check against double counting at country level
+*/
+
+map_Event_Owner:
+mapping load
+	medical_event_id,
+  	owner_id
+FROM 
+	[$(vQVD_Extract_Path)/e_v_medical_event.qvd](qvd)
+;
+
+/*
+Need to take the "user" from the attendee type as owners
+Need to create multiple owners based on account_type
+*/
+
+qualify *; unqualify %Attendee_Key,crm_record_id__aln;
+t_event_attendees_veeva:
+LOAD
+    attendee
+    ,ApplyMap('map_Event_Date',medical_event,Null()) as Event_date
+    ,ApplyMap('map_Event_Owner',medical_event,Null()) as owner_id
+  	,medical_event AS %Attendee_Key
+    ,attendee_type
+    ,account_id
+    ,ApplyMap('map_Event_Owner',medical_event,Null()) AS crm_record_id__aln
+	,status
+FROM [$(vQVD_Extract_Path)/e_v_event_attendees.qvd]
+(qvd)
+where
+status <> 'Rejected' AND attendee_type = 'Account' 
+AND ApplyMap('map_Event_Date',medical_event,Null()) < today() //Remove future events
+;
+Unqualify *;
+
+
+left join (t_event_attendees_veeva)
+IntervalMatch(t_event_attendees_veeva.Event_date,crm_record_id__aln)
+Load
+  start_fix,
+  end_fix,
+  crm_record_id__aln
+Resident temp_roster
+;
+
+left join (t_event_attendees_veeva)
+Load
+    crm_record_id__aln,
+    start_fix,
+    end_fix,
+	name__v,
+    territory__aln_name__v   as territory_id
+Resident
+temp_roster;
+
+rename table t_event_attendees_veeva to t_event_attendees_veeva_no_territory;
+
+t_event_attendees_veeva:
+NoConcatenate
+LOAD
+	*
+    ,If(ApplyMap('map_rep_account_id_account_territory',t_event_attendees_veeva.account_id&'|'&t_event_attendees_veeva.Territory,Null())=1,1) as t_event_attendees_veeva.is_targeted
+	,ApplyMap('map_rep_account_id_account_territory_indication',t_event_attendees_veeva.account_id&'|'&t_event_attendees_veeva.Territory,'Unspecified') as t_event_attendees_veeva.target_indication    
+    ;
+LOAD
+	*
+    ,ApplyMap('map_user_id_country',t_event_attendees_veeva.owner_id,Null()) as t_event_attendees_veeva.Country
+    ,territory_id as t_event_attendees_veeva.Territory
+Resident
+t_event_attendees_veeva_no_territory;
+
+drop tables t_event_attendees_veeva_no_territory;

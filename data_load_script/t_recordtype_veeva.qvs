@@ -1,0 +1,14 @@
+///$tab t_recordtype_veeva
+t_recordtype_veeva:
+LOAD
+    businessprocess_id
+    ,created_date
+    ,recordtype_desc
+    ,recordtype_id
+    ,is_person_type
+    ,last_modified_date
+    ,recordtype_name
+    ,object_type
+FROM 
+	[$(vQVD_Extract_Path)/e_v_recordtype.qvd](qvd)
+;

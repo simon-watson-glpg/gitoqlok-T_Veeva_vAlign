@@ -1,0 +1,18 @@
+///$tab t_synchronization_tracking_veeva
+t_synchronization_tracking_veeva:
+LOAD
+    is_canceled
+    , created_date
+    ,is_download_processed
+    ,synchronisation_tracking_id
+    ,last_modified_date
+    ,is_media_processed
+    ,mobile_id
+    ,synchronisation_tracking_name
+    ,owner_id
+    ,is_successful_sync
+    ,sync_completed_dt
+    ,sync_type_id
+FROM 
+	[$(vQVD_Extract_Path)/e_v_synchronization_tracking.qvd](qvd)
+;

@@ -1,0 +1,32 @@
+///$tab t_hco_affiliated_accounts_veeva
+temp_t_hco_affiliated_accounts_veeva:
+NoConcatenate
+LOAD
+	Subfield(external_id,'__',2) as account_id,
+    Subfield(external_id,'__',1) as parent_account_id
+FROM 
+	[$(vQVD_Extract_Path)/e_v_child_account.qvd](qvd)
+;
+
+Left Join(temp_t_hco_affiliated_accounts_veeva)
+Load
+    account_id
+    ,account_territory
+Resident t_account_territory_veeva
+Where 
+	Len(Trim(account_territory)) > 0
+;
+
+t_hco_affiliated_accounts_veeva:
+NoConcatenate
+Load
+	account_id
+    ,parent_account_id
+    ,account_territory
+	,ApplyMap('map_territory_id_country_id',account_territory,Null()) as country_id
+Resident
+	temp_t_hco_affiliated_accounts_veeva
+;
+  
+  
+ drop table temp_t_hco_affiliated_accounts_veeva;

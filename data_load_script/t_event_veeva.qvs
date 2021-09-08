@@ -1,0 +1,18 @@
+///$tab t_event_veeva
+t_event_veeva:
+LOAD
+    medical_event_id,
+    medical_event_id AS %Attendee_Key,
+    medical_event_name,
+    date(start_time,'DD/MM/YYYY') AS Event_Date,
+    'Q' & CEIL(NUM(MONTH(start_time))/3) AS Event_Date_quarter,
+    actual_costs,
+    glpg_budget_needed,
+    glpg_cancel_event,
+    glpg_event_completed,
+    glpg_record_type,
+    glpg_therapeutic_area,
+	owner_id
+FROM 
+	[$(vQVD_Extract_Path)/e_v_medical_event.qvd](qvd)
+;

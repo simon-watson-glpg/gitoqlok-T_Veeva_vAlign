@@ -1,0 +1,9 @@
+///$tab t_country_veeva
+t_country_veeva:
+NoConcatenate
+LOAD
+    country_id
+    ,alpha_2_cd
+FROM 
+	[$(vQVD_Extract_Path)/e_v_country.qvd](qvd)
+;

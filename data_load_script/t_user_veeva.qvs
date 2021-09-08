@@ -1,0 +1,55 @@
+///$tab t_user_veeva
+temp_user_veeva:
+Load
+    country_cd
+    ,created_date
+    ,user_id
+    ,user_id as crm_record_id__aln
+    ,last_modified_date
+    ,manager_id
+    ,user_name
+    ,first_name
+//     ,territory_id
+    ,product_expertise
+    ,is_active
+    ,user_type
+    ,profile_name
+FROM 
+	[$(vQVD_Extract_Path)/e_v_user.qvd](qvd)
+where is_active = 'True'    
+;
+
+t_user_veeva_temp:
+Hierarchy(user_id,manager_id,user_level_)
+Load
+	*
+    ,user_name as user_level_
+    ,Left(user_id,Len(user_id)-3) as user_mgmt_id
+    ,If(WildMatch(profile_name,'*MSL*'),1) as is_msl
+    ,If(WildMatch(profile_name,'*Rep*'),1) as is_rep
+Resident
+	temp_user_veeva
+Where 
+	WildMatch(profile_name,'VSPA*')
+    and user_type = 'Standard'
+;
+
+left join (t_user_veeva_temp)
+Load
+    crm_record_id__aln,
+    territory__aln_name__v
+Resident
+temp_roster;
+
+t_user_veeva:
+NoConcatenate
+Load
+	*,
+    territory__aln_name__v   as user_territory
+Resident
+t_user_veeva_temp;
+
+
+Drop Table temp_user_veeva,t_user_veeva_temp;
+
+Drop Field [user_level_];

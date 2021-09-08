@@ -1,0 +1,106 @@
+///$tab t_call_key_message_veeva
+Set vQVD_Extract_Path 		= 'lib://Customer View/1.QVD/1.Extract/';
+Set vQVD_Transform_Path 	= 'lib://Customer View/1.QVD/2.Transform/';
+
+t_call_key_message_veeva_temp:
+LOAD
+    account_id
+    ,attendee_type
+    ,clm_id
+    ,call_id
+    ,Date(Floor((call_date))) as call_date
+    ,call_key_message_category
+    ,contact_id
+    ,entity_reference_id
+    ,call_key_message_id
+    ,is_parent_call
+    ,key_message_id
+    ,mobile_id
+    ,call_key_message_name
+    ,presentation_id
+    ,product_id
+    ,account_segment
+    ,call_key_message_start_time
+    ,user_id
+    ,vehicle
+   	,call_id & call_key_message_name as %Key_Message_key
+FROM 
+	[$(vQVD_Extract_Path)/e_v_call_key_message.qvd](qvd)
+;
+
+/* 
+CODE UPDATE
+Simon Watson - 2021-02-24
+Updated to include temp call2keymessage full table additions - these will eventually be imported into AWS, at which point we remove the below addition
+*/
+
+left join (t_call_key_message_veeva_temp)
+LOAD
+   	Call2_vod__c & Name as %Key_Message_key,
+	Clm_Presentation_Name_vod__c as clm_presentation_name,
+    Reaction_vod__c as clm_reaction,
+    Key_Message_vod__c as key_message_description
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_call2keymessage_addition.qvd]
+(qvd);
+
+left join (t_call_key_message_veeva_temp)
+LOAD
+	Id as key_message_id,
+	if(len(Vault_Doc_Id_vod__c)>0,'CLM','Key message') as message_type,
+    Name as key_message_group
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_key_message_detail.qvd]
+(qvd)
+
+;
+
+
+////////////////////////////////////////////////////////////////////////
+
+
+NoConcatenate
+t_call_clm_veeva:
+Load
+//    account_id
+//     ,attendee_type
+    clm_id
+    ,call_id
+//     ,call_date
+//     ,call_key_message_category
+    ,contact_id
+    ,entity_reference_id
+    ,call_key_message_id
+    ,is_parent_call
+    ,key_message_id
+    ,mobile_id
+//     ,call_key_message_name
+    ,presentation_id
+    ,product_id
+    ,account_segment
+    ,call_key_message_start_time
+    ,user_id
+    ,vehicle
+    ,clm_reaction
+    ,clm_presentation_name
+    ,key_message_group as clm_description
+    ,%Key_Message_key as clm_unique_id
+    ,message_type
+Resident
+t_call_key_message_veeva_temp
+where message_type = 'CLM'
+;
+
+
+t_call_key_message_veeva:
+Load
+    call_id
+    ,call_key_message_name
+    ,clm_reaction as key_message_reaction
+    ,if(isnull(key_message_group),'blank',key_message_group) as key_message
+Resident
+t_call_key_message_veeva_temp
+where message_type = 'Key message'
+;
+
+
+
+drop table t_call_key_message_veeva_temp;

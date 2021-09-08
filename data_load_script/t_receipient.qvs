@@ -1,0 +1,48 @@
+///$tab t_receipient
+// Define latest survey response
+t_v_Recipient:
+LOAD
+    Survey_vod__c as %SurveyKey
+	,Name as survey_name
+	,Account_vod__c
+	,date(MAX(Submitted_DateTime_vod__c),'DD/MM/YYYY HH:MM:SS') as Submitted_DateTime_vod__c    
+FROM 
+	[lib://Customer View/1.QVD/5.Migration/e_v_survey_response.qvd](qvd)
+// where (Name = 'Segmentation Marketing'  and Status_vod__c = 'Submitted_vod')
+// 	or (Name = 'Préférences Omnicanales' and Status_vod__c = 'Submitted_vod')
+// 	or (Name = 'Stratégie Thérapeutique' and Status_vod__c = 'Submitted_vod')
+where Status_vod__c = 'Submitted_vod'
+group by Survey_vod__c, Account_vod__c, Name
+;
+
+left join (t_v_Recipient)
+LOAD
+    Id as %Answer_Key,
+    Survey_vod__c as %SurveyKey,
+    Account_vod__c
+FROM 
+	[lib://Customer View/1.QVD/5.Migration/e_v_survey_response.qvd](qvd)
+;
+
+left join (t_v_Recipient)
+LOAD
+	Survey_Target_vod__c as %Answer_Key,     
+	Id,
+    Name,
+    Order_vod__c,
+    Question_Text_vod__c,
+    SubField(Response_vod__c,';',IterNo()) as Answer,
+    IterNo() as Order,
+    Response_vod__c,
+    Survey_Question_vod__c
+//     ApplyMap('Map_Segment_by_Response',Response_vod__c,null()) as Segment   
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_response_detail.qvd]
+(qvd)
+While IterNo() <= 1+Len(KeepChar(Response_vod__c,';'));
+
+left join
+Load
+    account_id as Account_vod__c
+    ,account_territory
+    ,ApplyMap('map_territory_id_country_id',account_territory,Null()) as country_id
+Resident t_account_territory_veeva;

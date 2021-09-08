@@ -1,0 +1,17 @@
+///$tab t_call_detail_veeva
+t_call_detail_veeva:
+LOAD
+    call_id
+    ,created_date
+    ,detail_group_id
+    ,detail_priority
+    ,call_detail_id
+    ,is_parent_call
+    ,last_modified_date
+    ,mobile_id
+    ,call_detail_name
+    ,product_id
+    ,call_detail_type
+FROM 
+	[$(vQVD_Extract_Path)/e_v_call_detail.qvd](qvd)
+;

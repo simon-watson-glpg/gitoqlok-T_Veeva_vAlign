@@ -1,0 +1,26 @@
+///$tab t_call_discussion_veeva
+t_call_discussion_veeva:
+LOAD
+    account_tactic_id
+    ,account_id
+    ,activity
+    ,attendee_type
+    ,call_id
+    ,call_date
+    ,If(Len(Trim(discussion_topics))>0,discussion_topics) as discussion_topics
+    ,entity_reference_id
+    ,call_discussion_id
+    ,indication
+    ,is_parent_call
+    ,medical_event_id
+    ,mobile_id
+    ,call_discussion_name
+    ,product_strategy_id
+    ,product_tactic_id
+    ,product_id
+    ,recordtype_id
+    ,last_modified_date
+    ,created_date
+FROM 
+	[$(vQVD_Extract_Path)/e_v_call_discussion.qvd](qvd)
+;

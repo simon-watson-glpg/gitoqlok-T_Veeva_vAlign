@@ -1,0 +1,76 @@
+///$tab t_time_off_territory_veeva
+temp_time_off_territory_veeva:
+LOAD
+    time_off_territory_comment
+    ,country_cd
+    ,created_date
+    ,(date_id) as date_id
+    ,time_off_territory_hours_off
+    ,time_off_territory_hours
+    ,time_off_territory_hours / 8 as time_off_territory_days
+    ,time_off_territory_id
+    ,Left(owner_id,Len(owner_id)-3) as user_mgmt_id
+    ,last_modified_date
+    ,mobile_id
+    ,time_off_territory_name
+    ,owner_id
+    ,time_off_territory_reason
+    ,time_off_territory_start_time
+    ,time_off_territory_status
+    ,time_off_territory_time
+FROM 
+	[$(vQVD_Extract_Path)/e_v_time_off_territory.qvd](qvd)
+Where 
+// 	Date#(date_id,'YYYY-MM-DD') < Today()					//don't report time-off periods for the future
+    date_id < Today()										//don't report time-off periods for the future
+;
+
+map_user_is_manager:
+Mapping
+load
+    user_id
+    ,1
+FROM 
+	[$(vQVD_Extract_Path)/e_v_user.qvd](qvd)
+Where 
+	WildMatch(Upper(profile_name),'*REP*','*MSL*')		//time-of should not be taken for managers.
+;
+
+
+temp_time_off_territory_veeva_no_territory:
+NoConcatenate
+Load
+	*,
+    owner_id as crm_record_id__aln
+Resident
+	temp_time_off_territory_veeva
+Where
+	ApplyMap('map_user_is_manager',owner_id,Null()) = 1
+;
+
+left join (temp_time_off_territory_veeva_no_territory)
+IntervalMatch(date_id,crm_record_id__aln)
+Load
+  start_fix,
+  end_fix,
+  crm_record_id__aln
+Resident temp_roster
+;
+
+left join (temp_time_off_territory_veeva_no_territory)
+Load
+    crm_record_id__aln,
+    start_fix,
+    end_fix,
+	name__v,
+    territory__aln_name__v   as territory_id
+Resident
+temp_roster;
+
+t_time_off_territory_veeva:
+Load 
+	*
+	,ApplyMap('map_territory_id_country_id',territory_id,Null()) as country_id
+Resident temp_time_off_territory_veeva_no_territory;
+
+drop tables temp_time_off_territory_veeva,temp_time_off_territory_veeva_no_territory;

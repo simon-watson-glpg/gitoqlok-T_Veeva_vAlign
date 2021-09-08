@@ -1,0 +1,20 @@
+///$tab 0_main
+/***
+  System Variables
+***/
+
+$(Must_Include=lib://Qlik System Variables/Qlik_Sense_System_Variables.txt);     
+
+/***
+  Path Variables
+***/
+
+
+/*
+REVERTED TO BACK UP ON 2021-07-06 
+UPDATED ACCESS TO BI VEEVA ACCOUNT HAS CAUSED API CALLS TO FAIL
+*/
+
+Set vQVD_Extract_Path 		= 'lib://Customer View/1.QVD/1.Extract/';
+//Set vQVD_Extract_Path 		= 'lib://Customer View/1.QVD/10.Backup/';
+Set vQVD_Transform_Path 	= 'lib://Customer View/1.QVD/2.Transform/';

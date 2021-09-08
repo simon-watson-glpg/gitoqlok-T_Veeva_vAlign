@@ -1,0 +1,44 @@
+///$tab t_approved_email
+/* 
+Approved email - added 2021-02-22
+
+*/
+qualify *;
+t_sent_email:
+LOAD
+    Account_vod__c,
+	Territory_vod__c,
+    OwnerId,
+	ApplyMap('map_user_id_country',OwnerId,Null()) as Country,
+    If(ApplyMap('map_rep_account_id_account_territory',Account_vod__c&'|'&Territory_vod__c,Null())=1,1) as is_targeted,
+    ApplyMap('map_rep_account_id_account_territory_indication',Account_vod__c&'|'&Territory_vod__c,Null()) as target_indication,      
+	Email_Sent_Date_vod__c,
+	Id as email_id,
+	Name,
+    Account_Email_vod__c,
+    Approved_Email_Template_vod__c,
+    Detail_Group_vod__c,
+    Email_Config_Values_vod__c,
+    Opened_vod__c,
+    Product_Display_vod__c,
+    Product_vod__c,
+    Status_vod__c,
+    Approved_Document_Views_vod__c,
+    Last_Open_Date_vod__c,
+    weekday(Last_Open_Date_vod__c) as Last_open_date_day,
+    Last_Click_Date_vod__c,
+//     Click_Count_vod__c,
+//     Open_Count_vod__c,
+    Clicked_Custom__c,
+    Call2_vod__c,
+//    Medical_Inquiry_vod__c,
+//     Key_Message_vod__c,
+//     Content_Type_vod__c,
+    Email_Source_vod__c,
+    Subject_vod__c
+FROM [lib://Customer View/1.QVD/5.Migration/e_sent_email.qvd]
+(qvd)
+//   where Status_vod__c 	= 'Delivered_vod'
+//   and Opened_vod__c 		= '1'
+;
+unqualify *;

@@ -1,0 +1,39 @@
+///$tab t_territory_veeva
+
+/*
+Don't believe this is being used in final dashboard
+*/
+
+
+temp_territory_veeva:
+LOAD
+    Id as territory_id
+    ,Name as territory_name
+    ,ParentTerritoryId as parentterritory_id
+    ,Description as territory_desc
+    ,LastModifiedDate as last_modified_date
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_territory.qvd]
+(qvd);
+;
+
+t_territory_veeva:
+Hierarchy(territory_id,parentterritory_id,territory_level_)
+Load
+	*
+    ,territory_name as territory_level_
+Resident
+	temp_territory_veeva 
+;
+
+t_territory_bridge_veeva:
+HierarchyBelongsTo(territory_id,parentterritory_id,territory_name,territory_ancestor_id,territory_ancestor_name,territory_level)
+LOAD
+    Id as territory_id
+    ,Name as territory_name
+    ,ParentTerritoryId as parentterritory_id
+    
+FROM [lib://Customer View/1.QVD/5.Migration/e_v_territory.qvd]
+(qvd);
+;
+
+Drop Tables temp_territory_veeva;

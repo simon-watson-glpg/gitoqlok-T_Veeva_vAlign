@@ -1,0 +1,40 @@
+///$tab t_user_mgmt_veeva
+temp_roster:
+LOAD 
+	id as roster_member__aln,
+	name__v, 
+	status__v,
+    crm_record_id__aln
+;
+
+SELECT "id",
+	"name__v",
+	"status__v",
+    "crm_record_id__aln"
+FROM "veeva_align"."roster_member__aln";
+
+/*
+start date does not map to historic calls, the start date has been rolled back for any start prior to May 2021
+*/
+
+left join (temp_roster)
+LOAD 
+	end_date__aln, 
+	roster_member__aln, 
+	roster_member__aln_name__v, 
+	start_date__aln, 
+    if(start_date__aln<'2021-05-01','2019-01-01',start_date__aln) as start_fix,   //
+    date(end_date__aln,'YYYY-MM-DD') AS end_fix,
+	territory__aln, 
+	territory__aln_name__v
+;
+
+SELECT 
+	"end_date__aln",
+	"roster_member__aln",
+	"roster_member__aln_name__v",
+	"start_date__aln",
+	"start_datetime__aln",
+	"territory__aln",
+	"territory__aln_name__v"
+FROM "veeva_align"."roster_member_territory__aln";
